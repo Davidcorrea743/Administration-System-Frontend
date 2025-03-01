@@ -1,0 +1,36 @@
+html,
+body {
+  background-image: url(./../../public/background.jpg);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  min-height: 100vh; /* Asegura que el fondo ocupe al menos toda la pantalla */
+  margin: 0; /* Elimina márgenes del body */
+}
+
+.card {
+  margin: 2rem; /* Espacio exterior en todos los lados */
+  /* O para más control: */
+  margin-top: 30px;
+  margin-bottom: 30px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.text-center {
+  text-align: center;
+  justify-content: center;
+}
+
+.container {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.icono-flecha {
+  color: blue; /* Cambia "green" por el color deseado */
+  font-size: 1.8rem;
+  cursor: pointer;
+  padding: 2%;
+}
