@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Button } from "react-bootstrap";
+import { Modal, Button } from "react-bootstrap"; // Asegúrate de importar Button si no estaba
 import api from "../services/api";
 
 interface DetailsModalProps {
   show: boolean;
   onHide: () => void;
-  endpoint: string; // Ejemplo: "/condominio/{id}"
-  id: string; // ID del registro seleccionado
+  endpoint: string;
+  id: string;
 }
 
 const DetailsModal: React.FC<DetailsModalProps> = ({
@@ -15,38 +15,29 @@ const DetailsModal: React.FC<DetailsModalProps> = ({
   endpoint,
   id,
 }) => {
-  const [details, setDetails] = useState<Record<string, any> | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Función: Obtiene los detalles del registro desde el backend
   useEffect(() => {
     if (show && id) {
       const fetchDetails = async () => {
         setLoading(true);
-        setError(null);
         try {
           const response = await api.get(`${endpoint}/${id}`);
-          setDetails(response.data);
+          setData(response.data);
         } catch (err: any) {
-          console.error("Error fetching details:", err);
-          setError("Error al cargar los detalles.");
+          setError("Error al cargar los detalles: " + err.message);
         } finally {
           setLoading(false);
         }
       };
       fetchDetails();
     }
-  }, [show, id, endpoint]);
+  }, [show, endpoint, id]);
 
-  // Función: Formatea las claves para mostrarlas legiblemente
-  const formatKey = (key: string) => {
-    return key
-      .replace(/([A-Z])/g, " $1")
-      .replace(/^./, (str) => str.toUpperCase())
-      .replace("Rif", "RIF")
-      .replace("No ", "No. ");
-  };
+  // Campos a excluir
+  const excludedFields = ["id", "createdAt", "updatedAt", "deletedAt"];
 
   return (
     <Modal show={show} onHide={onHide}>
@@ -57,18 +48,19 @@ const DetailsModal: React.FC<DetailsModalProps> = ({
         {loading ? (
           <p>Cargando...</p>
         ) : error ? (
-          <p style={{ color: "red" }}>{error}</p>
-        ) : details ? (
+          <p className="text-danger">{error}</p>
+        ) : data ? (
           <div>
-            {Object.entries(details).map(([key, value]) => (
-              <p key={key}>
-                <strong>{formatKey(key)}:</strong>{" "}
-                {key === "fecha" ? new Date(value).toLocaleString() : value}
-              </p>
-            ))}
+            {Object.entries(data)
+              .filter(([key]) => !excludedFields.includes(key)) // Filtramos los campos excluidos
+              .map(([key, value]) => (
+                <p key={key}>
+                  <strong>{key}:</strong> {value?.toString()}
+                </p>
+              ))}
           </div>
         ) : (
-          <p>No hay datos disponibles.</p>
+          <p>No hay datos disponibles</p>
         )}
       </Modal.Body>
       <Modal.Footer>

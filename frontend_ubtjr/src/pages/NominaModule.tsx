@@ -202,20 +202,37 @@ const NominaModule: React.FC<NominaModuleProps> = ({
     }
   };
 
-  // Función: Calcula el monto total asegurando valores numéricos
+  // Función: Calcula el monto total con validación estricta
   const calculateTotal = (nomina: Nomina) => {
-    const sueldo = nomina.sueldo || 0;
-    const primas = nomina.primas || 0;
-    const complementos = nomina.complementos || 0;
-    const asistenciaSE = nomina.asistenciaSE || 0;
-    const aguinaldos = nomina.aguinaldos || 0;
-    const bonoVacacional = nomina.bonoVacacional || 0;
-    const otrasSubvenciones = nomina.otrasSubvenciones || 0;
-    const prestacionesSociales = nomina.prestacionesSociales || 0;
-    const retencionesIVSS = nomina.retencionesIVSS || 0;
-    const retencionSPF = nomina.retencionSPF || 0;
-    const retencionFAOV = nomina.retencionFAOV || 0;
-    const comisionesBancarias = nomina.comisionesBancarias || 0;
+    // Convertimos cada campo a número, manejando null, undefined o strings vacíos
+    const sueldo = Number(nomina.sueldo) || 0;
+    const primas = Number(nomina.primas) || 0;
+    const complementos = Number(nomina.complementos) || 0;
+    const asistenciaSE = Number(nomina.asistenciaSE) || 0;
+    const aguinaldos = Number(nomina.aguinaldos) || 0;
+    const bonoVacacional = Number(nomina.bonoVacacional) || 0;
+    const otrasSubvenciones = Number(nomina.otrasSubvenciones) || 0;
+    const prestacionesSociales = Number(nomina.prestacionesSociales) || 0;
+    const retencionesIVSS = Number(nomina.retencionesIVSS) || 0;
+    const retencionSPF = Number(nomina.retencionSPF) || 0;
+    const retencionFAOV = Number(nomina.retencionFAOV) || 0;
+    const comisionesBancarias = Number(nomina.comisionesBancarias) || 0;
+
+    // Depuración: imprimimos los valores para verificar
+    console.log("Valores de nómina:", {
+      sueldo,
+      primas,
+      complementos,
+      asistenciaSE,
+      aguinaldos,
+      bonoVacacional,
+      otrasSubvenciones,
+      prestacionesSociales,
+      retencionesIVSS,
+      retencionSPF,
+      retencionFAOV,
+      comisionesBancarias,
+    });
 
     return (
       sueldo +
