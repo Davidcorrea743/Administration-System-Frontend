@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
 import { Modal, Button, Form } from "react-bootstrap";
+import DetailsModal from "../components/DetailsModal"; // Importamos DetailsModal
 
 interface Impuesto {
   id: string;
@@ -34,6 +35,8 @@ const ImpuestosModule: React.FC<ImpuestosModuleProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showDetailModal, setShowDetailModal] = useState<boolean>(false); // Estado para el modal de detalles
+  const [selectedId, setSelectedId] = useState<string>(""); // ID del impuesto seleccionado
   const [newImpuesto, setNewImpuesto] = useState<Partial<Impuesto>>({});
   const [editImpuesto, setEditImpuesto] = useState<Impuesto | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -112,6 +115,12 @@ const ImpuestosModule: React.FC<ImpuestosModuleProps> = ({
     }
   };
 
+  // Función: Abre el modal de detalles
+  const handleShowDetails = (id: string) => {
+    setSelectedId(id);
+    setShowDetailModal(true);
+  };
+
   // Función: Edita un impuesto existente y actualiza la lista
   const handleEditImpuesto = async () => {
     if (!editImpuesto) return;
@@ -170,7 +179,7 @@ const ImpuestosModule: React.FC<ImpuestosModuleProps> = ({
         ? checked
         : type === "text"
         ? value.toUpperCase()
-        : value;
+        : Number(value); // Convertimos a número para campos numéricos
     if (isEdit && editImpuesto) {
       setEditImpuesto({ ...editImpuesto, [name]: updatedValue });
     } else {
@@ -247,7 +256,18 @@ const ImpuestosModule: React.FC<ImpuestosModuleProps> = ({
                 displayedImpuestos.map((impuesto) => (
                   <tr key={impuesto.id}>
                     <td>{impuesto.id}</td>
-                    <td>{impuesto.tipo}</td>
+                    <td>
+                      <span
+                        style={{
+                          cursor: "pointer",
+                          color: "blue",
+                          textDecoration: "underline",
+                        }}
+                        onClick={() => handleShowDetails(impuesto.id)}
+                      >
+                        {impuesto.tipo}
+                      </span>
+                    </td>
                     <td>{impuesto.noFactura}</td>
                     <td>{impuesto.montoPagar}</td>
                     <td>
@@ -448,6 +468,14 @@ const ImpuestosModule: React.FC<ImpuestosModuleProps> = ({
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal de detalles */}
+      <DetailsModal
+        show={showDetailModal}
+        onHide={() => setShowDetailModal(false)}
+        endpoint="/Impuestos"
+        id={selectedId}
+      />
     </>
   );
 };

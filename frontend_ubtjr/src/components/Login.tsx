@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login, loginAdmin } from "../services/authService";
+import { login } from "../services/authService";
 
 interface LoginProps {
   setToken: (token: string | null) => void;
@@ -115,15 +115,6 @@ const Login: React.FC<LoginProps> = ({ setToken }) => {
         </p>
         <p className="text-center">
           <Link to="/forgot-password">¿Olvidaste tu contraseña?</Link>
-        </p>
-        <p className="text-center">
-          <button
-            onClick={handleAdminLogin}
-            className="btn btn-link text-danger p-0"
-            style={{ background: "none", border: "none" }}
-          >
-            Iniciar sesión como administrador
-          </button>
         </p>
       </div>
     </div>

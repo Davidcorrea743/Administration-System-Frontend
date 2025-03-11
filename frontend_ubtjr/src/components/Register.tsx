@@ -28,7 +28,7 @@ const Register: React.FC = () => {
 
   return (
     <div className="container d-flex justify-content-center align-items-center vh-100">
-      <div className="card p-3 shadow-lg">
+      <div className="card p-3 shadow-lg w-50">
         <h3 className="text-center">Registrarse</h3>
         <form onSubmit={handleSubmit}>
           <div className="mb-3">

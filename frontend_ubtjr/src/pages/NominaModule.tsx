@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import api from "../services/api";
 import { Modal, Button, Form } from "react-bootstrap";
+import DetailsModal from "../components/DetailsModal";
 
 interface Nomina {
   id: string;
@@ -43,6 +44,8 @@ const NominaModule: React.FC<NominaModuleProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [newNomina, setNewNomina] = useState<Partial<Nomina>>({});
   const [editNomina, setEditNomina] = useState<Nomina | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -121,6 +124,12 @@ const NominaModule: React.FC<NominaModuleProps> = ({
     }
   };
 
+  // Función: Abre el modal de detalles
+  const handleShowDetails = (id: string) => {
+    setSelectedId(id);
+    setShowDetailModal(true);
+  };
+
   // Función: Edita una nómina existente y actualiza la lista
   const handleEditNomina = async () => {
     if (!editNomina) return;
@@ -165,13 +174,13 @@ const NominaModule: React.FC<NominaModuleProps> = ({
     }
   };
 
-  // Función: Maneja los cambios en los inputs del formulario, no hay strings para uppercase aquí
+  // Función: Maneja los cambios en los inputs del formulario, convirtiendo a número donde sea necesario
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     isEdit: boolean = false
   ) => {
     const { name, value, type, checked } = e.target;
-    const updatedValue = type === "checkbox" ? checked : value;
+    const updatedValue = type === "checkbox" ? checked : Number(value); // Convertimos a número para campos numéricos
     if (isEdit && editNomina) {
       setEditNomina({ ...editNomina, [name]: updatedValue });
     } else {
@@ -191,6 +200,37 @@ const NominaModule: React.FC<NominaModuleProps> = ({
     } else {
       setNewNomina({ ...newNomina, fecha: isoDate });
     }
+  };
+
+  // Función: Calcula el monto total asegurando valores numéricos
+  const calculateTotal = (nomina: Nomina) => {
+    const sueldo = nomina.sueldo || 0;
+    const primas = nomina.primas || 0;
+    const complementos = nomina.complementos || 0;
+    const asistenciaSE = nomina.asistenciaSE || 0;
+    const aguinaldos = nomina.aguinaldos || 0;
+    const bonoVacacional = nomina.bonoVacacional || 0;
+    const otrasSubvenciones = nomina.otrasSubvenciones || 0;
+    const prestacionesSociales = nomina.prestacionesSociales || 0;
+    const retencionesIVSS = nomina.retencionesIVSS || 0;
+    const retencionSPF = nomina.retencionSPF || 0;
+    const retencionFAOV = nomina.retencionFAOV || 0;
+    const comisionesBancarias = nomina.comisionesBancarias || 0;
+
+    return (
+      sueldo +
+      primas +
+      complementos +
+      asistenciaSE +
+      aguinaldos +
+      bonoVacacional +
+      otrasSubvenciones +
+      prestacionesSociales -
+      retencionesIVSS -
+      retencionSPF -
+      retencionFAOV -
+      comisionesBancarias
+    );
   };
 
   // Función: Abre el modal de edición con los datos de la nómina seleccionada
@@ -248,22 +288,20 @@ const NominaModule: React.FC<NominaModuleProps> = ({
                 displayedNominas.map((nomina) => (
                   <tr key={nomina.id}>
                     <td>{nomina.id}</td>
-                    <td>{new Date(nomina.fecha).toLocaleDateString()}</td>
-                    <td>{nomina.sueldo}</td>
                     <td>
-                      {nomina.sueldo +
-                        nomina.primas +
-                        nomina.complementos +
-                        nomina.asistenciaSE +
-                        nomina.aguinaldos +
-                        nomina.bonoVacacional +
-                        nomina.otrasSubvenciones +
-                        nomina.prestacionesSociales -
-                        nomina.retencionesIVSS -
-                        nomina.retencionSPF -
-                        nomina.retencionFAOV -
-                        nomina.comisionesBancarias}
+                      <span
+                        style={{
+                          cursor: "pointer",
+                          color: "blue",
+                          textDecoration: "underline",
+                        }}
+                        onClick={() => handleShowDetails(nomina.id)}
+                      >
+                        {new Date(nomina.fecha).toLocaleDateString()}
+                      </span>
                     </td>
+                    <td>{nomina.sueldo || 0}</td>
+                    <td>{calculateTotal(nomina)}</td>
                     <td>
                       <button
                         className="btn btn-warning btn-sm me-2"
@@ -640,6 +678,14 @@ const NominaModule: React.FC<NominaModuleProps> = ({
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Modal de detalles */}
+      <DetailsModal
+        show={showDetailModal}
+        onHide={() => setShowDetailModal(false)}
+        endpoint="/nomina"
+        id={selectedId}
+      />
     </>
   );
 };
