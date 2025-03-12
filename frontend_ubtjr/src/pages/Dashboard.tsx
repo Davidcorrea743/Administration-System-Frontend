@@ -8,9 +8,11 @@ import CondominioModule from "./CondominioModule";
 import ImpuestosModule from "./ImpuestosModule";
 import NominaModule from "./NominaModule";
 import SeniatModule from "./SeniatModule";
-import ElecAseoModule from "./ElecAseoModule";
+//import ElecAseoModule from "./ElecAseoModule";
 import ServicioTelefModule from "./ServicioTelefModule";
-import ViaticosModule from "./ViaticosModule"; // Nuevo import
+import ViaticosModule from "./ViaticosModule";
+import ProveedoresModule from "./ProveedoresModule";
+import ServiciosBasicosModule from "./ServiciosBasicosModule"; // Nueva importación
 import { Form } from "react-bootstrap";
 
 interface DashboardProps {
@@ -23,6 +25,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
   const [filterType, setFilterType] = useState<"mes" | "año">("mes");
   const [filterValue, setFilterValue] = useState<string>("");
   const [searchRif, setSearchRif] = useState<string>("");
+  const [searchNoOficina, setSearchNoOficina] = useState<string>(""); // Nuevo estado para Servicios Básicos
   const navigate = useNavigate();
 
   const modules = [
@@ -30,9 +33,9 @@ const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
     "Facturas",
     "Impuestos",
     "Nomina",
+    "Proveedores",
     "Seniat",
-    "Elec & Aseo",
-    "Servicio Telef",
+    "Servicios Básicos",
     "Viaticos",
   ];
 
@@ -94,12 +97,20 @@ const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
             searchRif={searchRif}
           />
         );
-      case "elec & aseo":
+      // case "elec & aseo":
+      //   return (
+      //     <ElecAseoModule
+      //       filterType={filterType}
+      //       filterValue={filterValue}
+      //       searchRif={searchRif}
+      //     />
+      //   );
+      case "servicios básicos": // Nuevo caso para Servicios Básicos
         return (
-          <ElecAseoModule
+          <ServiciosBasicosModule
             filterType={filterType}
             filterValue={filterValue}
-            searchRif={searchRif}
+            searchNoOficina={searchNoOficina} // Usamos searchNoOficina en lugar de searchRif
           />
         );
       case "servicio telef":
@@ -110,9 +121,17 @@ const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
             searchRif={searchRif}
           />
         );
-      case "viaticos": // Nuevo caso para Viáticos
+      case "viaticos":
         return (
           <ViaticosModule
+            filterType={filterType}
+            filterValue={filterValue}
+            searchRif={searchRif}
+          />
+        );
+      case "proveedores":
+        return (
+          <ProveedoresModule
             filterType={filterType}
             filterValue={filterValue}
             searchRif={searchRif}
@@ -134,7 +153,7 @@ const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
             <img src="./../../public/logo.jpg" alt="Logo" height="40" />
           </a>
           <div className="ms-auto d-flex align-items-center">
-            <span className="me-3">Hola, {userName}</span>
+            <span className="me-3">Hola, {userName.split("@")[0]}</span>
             <button
               className="btn btn-outline-danger btn-sm"
               onClick={handleLogout}
@@ -195,9 +214,21 @@ const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
                 </span>
                 <Form.Control
                   type="text"
-                  placeholder="Buscar por RIF"
-                  value={searchRif}
-                  onChange={(e) => setSearchRif(e.target.value.toUpperCase())}
+                  placeholder={
+                    selectedModule === "servicios básicos"
+                      ? "Buscar por No. Oficina"
+                      : "Buscar por RIF"
+                  }
+                  value={
+                    selectedModule === "servicios básicos"
+                      ? searchNoOficina
+                      : searchRif
+                  }
+                  onChange={(e) =>
+                    selectedModule === "servicios básicos"
+                      ? setSearchNoOficina(e.target.value)
+                      : setSearchRif(e.target.value.toUpperCase())
+                  }
                 />
               </div>
             </div>

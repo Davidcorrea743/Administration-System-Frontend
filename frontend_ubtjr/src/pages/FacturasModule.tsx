@@ -3,26 +3,36 @@ import api from "../services/api";
 import { Modal, Button, Form } from "react-bootstrap";
 import DetailsModal from "../components/DetailsModal";
 
-interface Invoice {
-  id: string;
-  rif: number;
-  nombre: string;
-  noFactura: number;
+interface FacturaBackend {
+  id: number;
   fecha: string;
-  fecha_vencimiento: string;
-  sub_total: number;
-  base: number;
-  iva: number;
-  porcentajeIva: number;
-  total: number;
-  retieneIva: boolean;
-  retencionIva: number;
-  retieneIslr: boolean;
-  retencionIslr: number;
-  retiene1xMil: boolean;
-  retencion1xMil: number;
-  retiene115: boolean;
-  retencion115: number;
+  noFactura: string;
+  proveedor: { rif: string };
+  nombre: string | null;
+  fecha_vencimiento: string | null;
+  sub_total: string;
+  iva: string;
+  porcentajeIva: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+interface Factura {
+  id: string;
+  fecha: string;
+  numeroFactura: string;
+  rif: string;
+  nombre: string; // Nuevo
+  fechaVencimiento: string; // Nuevo
+  subtotal: number; // Antes "monto"
+  iva: number; // Antes "montoConIva"
+  porcentajeIva: number; // Nuevo
+}
+
+interface ProveedorListItem {
+  rif: string;
+  descripcion: string;
 }
 
 interface FacturasModuleProps {
@@ -31,44 +41,63 @@ interface FacturasModuleProps {
   searchRif: string;
 }
 
-const formatToLocalDateTime = (isoString: string) => {
-  const date = new Date(isoString);
-  const offset = date.getTimezoneOffset() * 60000;
-  const localDate = new Date(date.getTime() - offset);
-  return localDate.toISOString().slice(0, 16);
+// Función para formatear la fecha sin horas
+const formatToLocalDate = (isoString: string) => {
+  return isoString.slice(0, 10); // Devuelve solo YYYY-MM-DD
 };
+
+// Función para obtener la fecha de mañana sin horas
+const getTomorrowDate = () => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().slice(0, 10); // Devuelve solo YYYY-MM-DD
+};
+
+// Función para mapear datos del backend al frontend
+const mapBackendToFrontend = (backendFactura: FacturaBackend): Factura => ({
+  id: backendFactura.id.toString(),
+  fecha: backendFactura.fecha,
+  numeroFactura: backendFactura.noFactura,
+  rif: backendFactura.proveedor.rif,
+  nombre: backendFactura.nombre || "",
+  fechaVencimiento: backendFactura.fecha_vencimiento || "",
+  subtotal: parseFloat(backendFactura.sub_total) || 0,
+  iva: parseFloat(backendFactura.iva) || 0,
+  porcentajeIva: parseFloat(backendFactura.porcentajeIva) || 16,
+});
+
+// Función para mapear datos del frontend al backend
+const mapFrontendToBackend = (
+  frontendFactura: Partial<Factura>
+): Partial<FacturaBackend> => ({
+  fecha: frontendFactura.fecha,
+  noFactura: frontendFactura.numeroFactura,
+  proveedor: { rif: frontendFactura.rif! },
+  nombre: frontendFactura.nombre,
+  fecha_vencimiento: frontendFactura.fechaVencimiento,
+  sub_total: frontendFactura.subtotal?.toString() || "0.00",
+  iva: frontendFactura.iva?.toString() || "0.00",
+  porcentajeIva: frontendFactura.porcentajeIva?.toString() || "16",
+});
 
 const FacturasModule: React.FC<FacturasModuleProps> = ({
   filterType,
   filterValue,
   searchRif,
 }) => {
-  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
-  const [displayedInvoices, setDisplayedInvoices] = useState<Invoice[]>([]);
+  const [allFacturas, setAllFacturas] = useState<Factura[]>([]);
+  const [displayedFacturas, setDisplayedFacturas] = useState<Factura[]>([]);
+  const [proveedores, setProveedores] = useState<ProveedorListItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string>("");
-  const [newInvoice, setNewInvoice] = useState<Partial<Invoice>>({
-    rif: 0,
-    nombre: "",
-    noFactura: 0,
-    sub_total: 0,
-    base: 0,
-    iva: 0,
-    porcentajeIva: 0,
-    total: 0,
-    retieneIva: false,
-    retencionIva: 0,
-    retieneIslr: false,
-    retencionIslr: 0,
-    retiene1xMil: false,
-    retencion1xMil: 0,
-    retiene115: false,
-    retencion115: 0,
+  const [newFactura, setNewFactura] = useState<Partial<Factura>>({
+    porcentajeIva: 16, // Valor por defecto
+    fechaVencimiento: getTomorrowDate(), // Fecha de mañana por defecto
   });
-  const [editInvoice, setEditInvoice] = useState<Invoice | null>(null);
+  const [editFactura, setEditFactura] = useState<Factura | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -76,15 +105,17 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
   const itemsPerPage = 10;
 
   useEffect(() => {
-    const fetchInvoices = async () => {
+    const fetchFacturas = async () => {
       setLoading(true);
       try {
         const response = await api.get("/facturas");
-        let filteredInvoices = response.data;
+        console.log("Facturas recibidas del backend:", response.data);
+        const mappedFacturas = response.data.map(mapBackendToFrontend);
+        let filteredFacturas = mappedFacturas;
 
         if (filterValue) {
-          filteredInvoices = filteredInvoices.filter((invoice: Invoice) => {
-            const date = new Date(invoice.fecha);
+          filteredFacturas = filteredFacturas.filter((factura: Factura) => {
+            const date = new Date(factura.fecha);
             if (filterType === "mes") {
               const [year, month] = filterValue.split("-");
               return (
@@ -98,129 +129,146 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
         }
 
         if (searchRif) {
-          filteredInvoices = filteredInvoices.filter((invoice: Invoice) =>
-            invoice.rif.toString().includes(searchRif)
+          filteredFacturas = filteredFacturas.filter((factura: Factura) =>
+            factura.rif.toString().includes(searchRif)
           );
         }
 
-        setAllInvoices(filteredInvoices);
-        updateDisplayedItems(filteredInvoices, currentPage);
+        setAllFacturas(filteredFacturas);
+        updateDisplayedItems(filteredFacturas, currentPage);
       } catch (error: any) {
-        console.error("Error fetching invoices:", error);
+        console.error(
+          "Error fetching facturas:",
+          error.response?.data || error.message
+        );
         setErrorMessage("Error al cargar las facturas.");
         setTimeout(() => setErrorMessage(null), 3000);
       } finally {
         setLoading(false);
       }
     };
-    fetchInvoices();
+    fetchFacturas();
   }, [filterType, filterValue, searchRif]);
 
-  const updateDisplayedItems = (items: Invoice[], page: number) => {
+  useEffect(() => {
+    const fetchProveedores = async () => {
+      try {
+        const response = await api.get("/Proveedor/listAll");
+        console.log("Proveedores recibidos:", response.data);
+        setProveedores(response.data);
+      } catch (error: any) {
+        console.error(
+          "Error fetching proveedores:",
+          error.response?.data || error.message
+        );
+        setErrorMessage("Error al cargar los proveedores.");
+        setTimeout(() => setErrorMessage(null), 3000);
+      }
+    };
+    fetchProveedores();
+  }, []);
+
+  const updateDisplayedItems = (items: Factura[], page: number) => {
     const startIndex = (page - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    setDisplayedInvoices(items.slice(startIndex, endIndex));
+    setDisplayedFacturas(items.slice(startIndex, endIndex));
     setTotalPages(Math.ceil(items.length / itemsPerPage));
   };
 
-  const handleAddInvoice = async () => {
-    console.log("Payload enviado:", newInvoice);
+  const handleAddFactura = async () => {
     try {
-      const response = await api.post("/facturas", newInvoice);
-      const updatedInvoices = [...allInvoices, response.data];
-      setAllInvoices(updatedInvoices);
-      updateDisplayedItems(updatedInvoices, currentPage);
+      const dataToSend = mapFrontendToBackend(newFactura);
+      console.log("Datos enviados al guardar factura:", dataToSend);
+      const response = await api.post("/facturas", dataToSend);
+      console.log("Respuesta del POST /facturas:", response.data);
+      const newFacturaMapped = mapBackendToFrontend(response.data);
+      const updatedFacturas = [...allFacturas, newFacturaMapped];
+      setAllFacturas(updatedFacturas);
+      updateDisplayedItems(updatedFacturas, currentPage);
       setShowAddModal(false);
-      setNewInvoice({
-        rif: 0,
-        nombre: "",
-        noFactura: 0,
-        sub_total: 0,
-        base: 0,
-        iva: 0,
-        porcentajeIva: 0,
-        total: 0,
-        retieneIva: false,
-        retencionIva: 0,
-        retieneIslr: false,
-        retencionIslr: 0,
-        retiene1xMil: false,
-        retencion1xMil: 0,
-        retiene115: false,
-        retencion115: 0,
-      });
+      setNewFactura({});
       setSuccessMessage("Factura agregada con éxito");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error: any) {
-      console.error("Error adding invoice:", error);
-      setErrorMessage("Error al agregar la factura: " + error.message);
+      console.error(
+        "Error adding factura:",
+        error.response?.data || error.message
+      );
+      setErrorMessage(
+        "Error al agregar la factura: " +
+          (error.response?.data?.message || error.message)
+      );
       setTimeout(() => setErrorMessage(null), 3000);
     }
   };
 
-  const handleShowDetails = (id: string) => {
-    setSelectedId(id);
-    setShowDetailModal(true);
-  };
-
-  const handleEditInvoice = async () => {
-    if (!editInvoice) return;
+  const handleEditFactura = async () => {
+    if (!editFactura) return;
     try {
-      const response = await api.put(
-        `/facturas/${editInvoice.id}`,
-        editInvoice
+      const dataToSend = mapFrontendToBackend(editFactura);
+      console.log("Datos enviados al editar factura:", dataToSend);
+      const response = await api.put(`/facturas/${editFactura.id}`, dataToSend);
+      console.log("Respuesta del PUT /facturas:", response.data);
+      const updatedFacturaMapped = mapBackendToFrontend(response.data);
+      const updatedFacturas = allFacturas.map((fact) =>
+        fact.id === editFactura.id ? updatedFacturaMapped : fact
       );
-      const updatedInvoices = allInvoices.map((inv) =>
-        inv.id === editInvoice.id ? response.data : inv
-      );
-      setAllInvoices(updatedInvoices);
-      updateDisplayedItems(updatedInvoices, currentPage);
+      setAllFacturas(updatedFacturas);
+      updateDisplayedItems(updatedFacturas, currentPage);
       setShowEditModal(false);
-      setEditInvoice(null);
+      setEditFactura(null);
       setSuccessMessage("Factura editada con éxito");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error: any) {
-      console.error("Error editing invoice:", error);
-      setErrorMessage("Error al editar la factura: " + error.message);
+      console.error(
+        "Error editing factura:",
+        error.response?.data || error.message
+      );
+      setErrorMessage(
+        "Error al editar la factura: " +
+          (error.response?.data?.message || error.message)
+      );
       setTimeout(() => setErrorMessage(null), 3000);
     }
   };
 
-  const handleDeleteInvoice = async (id: string) => {
+  const handleDeleteFactura = async (id: string) => {
     const confirmDelete = window.confirm(
       "¿Estás seguro de que deseas eliminar esta factura?"
     );
     if (confirmDelete) {
       try {
         await api.delete(`/facturas/${id}`);
-        const updatedInvoices = allInvoices.filter((inv) => inv.id !== id);
-        setAllInvoices(updatedInvoices);
-        updateDisplayedItems(updatedInvoices, currentPage);
+        const updatedFacturas = allFacturas.filter((fact) => fact.id !== id);
+        setAllFacturas(updatedFacturas);
+        updateDisplayedItems(updatedFacturas, currentPage);
         setSuccessMessage("Factura eliminada con éxito");
         setTimeout(() => setSuccessMessage(null), 3000);
       } catch (error: any) {
-        console.error("Error deleting invoice:", error);
-        setErrorMessage("Error al eliminar la factura: " + error.message);
+        console.error(
+          "Error deleting factura:",
+          error.response?.data || error.message
+        );
+        setErrorMessage(
+          "Error al eliminar la factura: " +
+            (error.response?.data?.message || error.message)
+        );
         setTimeout(() => setErrorMessage(null), 3000);
       }
     }
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
     isEdit: boolean = false
   ) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
     const updatedValue =
-      type === "checkbox"
-        ? checked
-        : type === "text"
-        ? value.toUpperCase()
-        : Number(value);
-    if (isEdit && editInvoice) {
-      setEditInvoice({ ...editInvoice, [name]: updatedValue });
+      name === "monto" || name === "montoConIva" ? Number(value) : value;
+    if (isEdit && editFactura) {
+      setEditFactura({ ...editFactura, [name]: updatedValue });
     } else {
-      setNewInvoice({ ...newInvoice, [name]: updatedValue });
+      setNewFactura({ ...newFactura, [name]: updatedValue });
     }
   };
 
@@ -230,17 +278,23 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
   ) => {
     const localDate = e.target.value;
     const isoDate = new Date(localDate).toISOString();
-    if (isEdit && editInvoice) {
-      setEditInvoice({ ...editInvoice, [e.target.name]: isoDate });
+    if (isEdit && editFactura) {
+      setEditFactura({ ...editFactura, fecha: isoDate });
     } else {
-      setNewInvoice({ ...newInvoice, [e.target.name]: isoDate });
+      setNewFactura({ ...newFactura, fecha: isoDate });
     }
   };
 
+  const handleShowDetails = (id: string) => {
+    setSelectedId(id);
+    setShowDetailModal(true);
+  };
+
   const openEditModal = (id: string) => {
-    const invoiceToEdit = allInvoices.find((inv) => inv.id === id);
-    if (invoiceToEdit) {
-      setEditInvoice(invoiceToEdit);
+    const facturaToEdit = allFacturas.find((fact) => fact.id === id);
+    console.log("Factura seleccionada para editar:", facturaToEdit);
+    if (facturaToEdit) {
+      setEditFactura(facturaToEdit);
       setShowEditModal(true);
     }
   };
@@ -248,7 +302,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
-      updateDisplayedItems(allInvoices, page);
+      updateDisplayedItems(allFacturas, page);
     }
   };
 
@@ -278,18 +332,18 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
           <table className="table table-striped">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Nombre</th>
+                <th>Fecha</th>
+                <th>Número Factura</th>
                 <th>RIF</th>
-                <th>Total</th>
+                <th>Subtotal</th>
+                <th>IVA</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {displayedInvoices.length > 0 ? (
-                displayedInvoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>{invoice.id}</td>
+              {displayedFacturas.length > 0 ? (
+                displayedFacturas.map((factura) => (
+                  <tr key={factura.id}>
                     <td>
                       <span
                         style={{
@@ -297,23 +351,25 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                           color: "blue",
                           textDecoration: "underline",
                         }}
-                        onClick={() => handleShowDetails(invoice.id)}
+                        onClick={() => handleShowDetails(factura.id)}
                       >
-                        {invoice.nombre}
+                        {new Date(factura.fecha).toLocaleDateString()}
                       </span>
                     </td>
-                    <td>{invoice.rif}</td>
-                    <td>{invoice.total}</td>
+                    <td>{factura.numeroFactura || "N/A"}</td>
+                    <td>{factura.rif || "N/A"}</td>
+                    <td>{factura.subtotal || "N/A"}</td>
+                    <td>{factura.iva || "N/A"}</td>
                     <td>
                       <button
                         className="btn btn-warning btn-sm me-2"
-                        onClick={() => openEditModal(invoice.id)}
+                        onClick={() => openEditModal(factura.id)}
                       >
                         <i className="bi bi-pencil"></i>
                       </button>
                       <button
                         className="btn btn-danger btn-sm"
-                        onClick={() => handleDeleteInvoice(invoice.id)}
+                        onClick={() => handleDeleteFactura(factura.id)}
                       >
                         <i className="bi bi-trash"></i>
                       </button>
@@ -322,7 +378,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="text-center">
+                  <td colSpan={6} className="text-center">
                     No hay facturas disponibles
                   </td>
                 </tr>
@@ -383,44 +439,12 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
         <Modal.Body>
           <Form>
             <Form.Group className="mb-3">
-              <Form.Label>RIF</Form.Label>
+              <Form.Label>Fecha de Factura</Form.Label>
               <Form.Control
-                type="number"
-                name="rif"
-                value={newInvoice.rif || ""}
-                onChange={(e) => handleInputChange(e)}
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Nombre</Form.Label>
-              <Form.Control
-                type="text"
-                name="nombre"
-                value={newInvoice.nombre || ""}
-                onChange={(e) => handleInputChange(e)}
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>No. Factura</Form.Label>
-              <Form.Control
-                type="number"
-                name="noFactura"
-                value={newInvoice.noFactura || ""}
-                onChange={(e) => handleInputChange(e)}
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Fecha</Form.Label>
-              <Form.Control
-                type="datetime-local"
+                type="date"
                 name="fecha"
                 value={
-                  newInvoice.fecha
-                    ? formatToLocalDateTime(newInvoice.fecha)
-                    : ""
+                  newFactura.fecha ? formatToLocalDate(newFactura.fecha) : ""
                 }
                 onChange={(e) => handleDateChange(e)}
                 required
@@ -429,33 +453,59 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
             <Form.Group className="mb-3">
               <Form.Label>Fecha de Vencimiento</Form.Label>
               <Form.Control
-                type="datetime-local"
-                name="fecha_vencimiento"
+                type="date"
+                name="fechaVencimiento"
                 value={
-                  newInvoice.fecha_vencimiento
-                    ? formatToLocalDateTime(newInvoice.fecha_vencimiento)
-                    : ""
+                  newFactura.fechaVencimiento
+                    ? formatToLocalDate(newFactura.fechaVencimiento)
+                    : getTomorrowDate()
                 }
                 onChange={(e) => handleDateChange(e)}
                 required
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Subtotal</Form.Label>
+              <Form.Label>Número de Factura</Form.Label>
               <Form.Control
-                type="number"
-                name="sub_total"
-                value={newInvoice.sub_total || ""}
+                type="text"
+                name="numeroFactura"
+                value={newFactura.numeroFactura || ""}
                 onChange={(e) => handleInputChange(e)}
                 required
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Base</Form.Label>
+              <Form.Label>Descripción</Form.Label>
+              <Form.Control
+                type="text"
+                name="nombre"
+                value={newFactura.nombre || ""}
+                onChange={(e) => handleInputChange(e)}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Proveedor (RIF)</Form.Label>
+              <Form.Select
+                name="rif"
+                value={newFactura.rif || ""}
+                onChange={(e) => handleInputChange(e)}
+                required
+              >
+                <option value="">Seleccione un proveedor</option>
+                {proveedores.map((prov) => (
+                  <option key={prov.rif} value={prov.rif}>
+                    {prov.descripcion}
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Subtotal</Form.Label>
               <Form.Control
                 type="number"
-                name="base"
-                value={newInvoice.base || ""}
+                name="subtotal"
+                value={newFactura.subtotal || ""}
                 onChange={(e) => handleInputChange(e)}
                 required
               />
@@ -465,7 +515,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
               <Form.Control
                 type="number"
                 name="iva"
-                value={newInvoice.iva || ""}
+                value={newFactura.iva || ""}
                 onChange={(e) => handleInputChange(e)}
                 required
               />
@@ -475,83 +525,13 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
               <Form.Control
                 type="number"
                 name="porcentajeIva"
-                value={newInvoice.porcentajeIva || ""}
+                value={
+                  newFactura.porcentajeIva !== undefined
+                    ? newFactura.porcentajeIva
+                    : 16
+                }
                 onChange={(e) => handleInputChange(e)}
                 required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Total</Form.Label>
-              <Form.Control
-                type="number"
-                name="total"
-                value={newInvoice.total || ""}
-                onChange={(e) => handleInputChange(e)}
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="checkbox"
-                label="Retiene IVA"
-                name="retieneIva"
-                checked={newInvoice.retieneIva || false}
-                onChange={(e) => handleInputChange(e)}
-              />
-              <Form.Control
-                type="number"
-                name="retencionIva"
-                value={newInvoice.retencionIva || ""}
-                onChange={(e) => handleInputChange(e)}
-                disabled={!newInvoice.retieneIva}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="checkbox"
-                label="Retiene ISLR"
-                name="retieneIslr"
-                checked={newInvoice.retieneIslr || false}
-                onChange={(e) => handleInputChange(e)}
-              />
-              <Form.Control
-                type="number"
-                name="retencionIslr"
-                value={newInvoice.retencionIslr || ""}
-                onChange={(e) => handleInputChange(e)}
-                disabled={!newInvoice.retieneIslr}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="checkbox"
-                label="Retiene 1xMil"
-                name="retiene1xMil"
-                checked={newInvoice.retiene1xMil || false}
-                onChange={(e) => handleInputChange(e)}
-              />
-              <Form.Control
-                type="number"
-                name="retencion1xMil"
-                value={newInvoice.retencion1xMil || ""}
-                onChange={(e) => handleInputChange(e)}
-                disabled={!newInvoice.retiene1xMil}
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Check
-                type="checkbox"
-                label="Retiene 115"
-                name="retiene115"
-                checked={newInvoice.retiene115 || false}
-                onChange={(e) => handleInputChange(e)} // Corrección aquí
-              />
-              <Form.Control
-                type="number"
-                name="retencion115"
-                value={newInvoice.retencion115 || ""}
-                onChange={(e) => handleInputChange(e)}
-                disabled={!newInvoice.retiene115}
               />
             </Form.Group>
           </Form>
@@ -560,7 +540,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
           <Button variant="secondary" onClick={() => setShowAddModal(false)}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={handleAddInvoice}>
+          <Button variant="primary" onClick={handleAddFactura}>
             Guardar Factura
           </Button>
         </Modal.Footer>
@@ -572,46 +552,16 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
           <Modal.Title>Editar Factura</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {editInvoice && (
+          {editFactura && (
             <Form>
               <Form.Group className="mb-3">
-                <Form.Label>RIF</Form.Label>
+                <Form.Label>Fecha de Recepción</Form.Label>
                 <Form.Control
-                  type="number"
-                  name="rif"
-                  value={editInvoice.rif || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Nombre</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="nombre"
-                  value={editInvoice.nombre || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>No. Factura</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="noFactura"
-                  value={editInvoice.noFactura || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Fecha</Form.Label>
-                <Form.Control
-                  type="datetime-local"
+                  type="date"
                   name="fecha"
                   value={
-                    editInvoice.fecha
-                      ? formatToLocalDateTime(editInvoice.fecha)
+                    editFactura.fecha
+                      ? formatToLocalDate(editFactura.fecha)
                       : ""
                   }
                   onChange={(e) => handleDateChange(e, true)}
@@ -621,33 +571,59 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
               <Form.Group className="mb-3">
                 <Form.Label>Fecha de Vencimiento</Form.Label>
                 <Form.Control
-                  type="datetime-local"
-                  name="fecha_vencimiento"
+                  type="date"
+                  name="fechaVencimiento"
                   value={
-                    editInvoice.fecha_vencimiento
-                      ? formatToLocalDateTime(editInvoice.fecha_vencimiento)
-                      : ""
+                    editFactura.fechaVencimiento
+                      ? formatToLocalDate(editFactura.fechaVencimiento)
+                      : getTomorrowDate()
                   }
                   onChange={(e) => handleDateChange(e, true)}
                   required
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Subtotal</Form.Label>
+                <Form.Label>Número de Factura</Form.Label>
                 <Form.Control
-                  type="number"
-                  name="sub_total"
-                  value={editInvoice.sub_total || ""}
+                  type="text"
+                  name="numeroFactura"
+                  value={editFactura.numeroFactura || ""}
                   onChange={(e) => handleInputChange(e, true)}
                   required
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Base</Form.Label>
+                <Form.Label>Descripción</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="nombre"
+                  value={editFactura.nombre || ""}
+                  onChange={(e) => handleInputChange(e, true)}
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Proveedor (RIF)</Form.Label>
+                <Form.Select
+                  name="rif"
+                  value={editFactura.rif || ""}
+                  onChange={(e) => handleInputChange(e, true)}
+                  required
+                >
+                  <option value="">Seleccione un proveedor</option>
+                  {proveedores.map((prov) => (
+                    <option key={prov.rif} value={prov.rif}>
+                      {prov.descripcion}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>Subtotal</Form.Label>
                 <Form.Control
                   type="number"
-                  name="base"
-                  value={editInvoice.base || ""}
+                  name="subtotal"
+                  value={editFactura.subtotal || ""}
                   onChange={(e) => handleInputChange(e, true)}
                   required
                 />
@@ -657,7 +633,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                 <Form.Control
                   type="number"
                   name="iva"
-                  value={editInvoice.iva || ""}
+                  value={editFactura.iva || ""}
                   onChange={(e) => handleInputChange(e, true)}
                   required
                 />
@@ -667,83 +643,13 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                 <Form.Control
                   type="number"
                   name="porcentajeIva"
-                  value={editInvoice.porcentajeIva || ""}
+                  value={
+                    editFactura.porcentajeIva !== undefined
+                      ? editFactura.porcentajeIva
+                      : 16
+                  }
                   onChange={(e) => handleInputChange(e, true)}
                   required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Total</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="total"
-                  value={editInvoice.total || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Check
-                  type="checkbox"
-                  label="Retiene IVA"
-                  name="retieneIva"
-                  checked={editInvoice.retieneIva || false}
-                  onChange={(e) => handleInputChange(e, true)}
-                />
-                <Form.Control
-                  type="number"
-                  name="retencionIva"
-                  value={editInvoice.retencionIva || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  disabled={!editInvoice.retieneIva}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Check
-                  type="checkbox"
-                  label="Retiene ISLR"
-                  name="retieneIslr"
-                  checked={editInvoice.retieneIslr || false}
-                  onChange={(e) => handleInputChange(e, true)}
-                />
-                <Form.Control
-                  type="number"
-                  name="retencionIslr"
-                  value={editInvoice.retencionIslr || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  disabled={!editInvoice.retieneIslr}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Check
-                  type="checkbox"
-                  label="Retiene 1xMil"
-                  name="retiene1xMil"
-                  checked={editInvoice.retiene1xMil || false}
-                  onChange={(e) => handleInputChange(e, true)}
-                />
-                <Form.Control
-                  type="number"
-                  name="retencion1xMil"
-                  value={editInvoice.retencion1xMil || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  disabled={!editInvoice.retiene1xMil}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Check
-                  type="checkbox"
-                  label="Retiene 115"
-                  name="retiene115"
-                  checked={editInvoice.retiene115 || false}
-                  onChange={(e) => handleInputChange(e, true)}
-                />
-                <Form.Control
-                  type="number"
-                  name="retencion115"
-                  value={editInvoice.retencion115 || ""}
-                  onChange={(e) => handleInputChange(e, true)}
-                  disabled={!editInvoice.retiene115}
                 />
               </Form.Group>
             </Form>
@@ -753,7 +659,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
           <Button variant="secondary" onClick={() => setShowEditModal(false)}>
             Cancelar
           </Button>
-          <Button variant="primary" onClick={handleEditInvoice}>
+          <Button variant="primary" onClick={handleEditFactura}>
             Guardar Cambios
           </Button>
         </Modal.Footer>
