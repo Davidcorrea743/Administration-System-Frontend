@@ -7,7 +7,8 @@ interface FacturaBackend {
   id: number;
   fecha: string;
   noFactura: string;
-  proveedor: { rif: string };
+  rif: string;
+  nombreProveedor?: string;
   nombre: string | null;
   fecha_vencimiento: string | null;
   sub_total: string;
@@ -23,11 +24,12 @@ interface Factura {
   fecha: string;
   numeroFactura: string;
   rif: string;
-  nombre: string; // Nuevo
-  fechaVencimiento: string; // Nuevo
-  subtotal: number; // Antes "monto"
-  iva: number; // Antes "montoConIva"
-  porcentajeIva: number; // Nuevo
+  nombre: string;
+  fechaVencimiento: string;
+  subtotal: number;
+  iva: number;
+  porcentajeIva: number;
+  nombreProveedor?: string;
 }
 
 interface ProveedorListItem {
@@ -41,38 +43,35 @@ interface FacturasModuleProps {
   searchRif: string;
 }
 
-// Función para formatear la fecha sin horas
 const formatToLocalDate = (isoString: string) => {
-  return isoString.slice(0, 10); // Devuelve solo YYYY-MM-DD
+  return isoString.slice(0, 10);
 };
 
-// Función para obtener la fecha de mañana sin horas
 const getTomorrowDate = () => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow.toISOString().slice(0, 10); // Devuelve solo YYYY-MM-DD
+  return tomorrow.toISOString().slice(0, 10);
 };
 
-// Función para mapear datos del backend al frontend
 const mapBackendToFrontend = (backendFactura: FacturaBackend): Factura => ({
   id: backendFactura.id.toString(),
   fecha: backendFactura.fecha,
   numeroFactura: backendFactura.noFactura,
-  rif: backendFactura.proveedor.rif,
+  rif: backendFactura.rif || "",
   nombre: backendFactura.nombre || "",
   fechaVencimiento: backendFactura.fecha_vencimiento || "",
   subtotal: parseFloat(backendFactura.sub_total) || 0,
   iva: parseFloat(backendFactura.iva) || 0,
   porcentajeIva: parseFloat(backendFactura.porcentajeIva) || 16,
+  nombreProveedor: backendFactura.nombreProveedor || "N/A",
 });
 
-// Función para mapear datos del frontend al backend
 const mapFrontendToBackend = (
   frontendFactura: Partial<Factura>
 ): Partial<FacturaBackend> => ({
   fecha: frontendFactura.fecha,
   noFactura: frontendFactura.numeroFactura,
-  proveedor: { rif: frontendFactura.rif! },
+  rif: frontendFactura.rif,
   nombre: frontendFactura.nombre,
   fecha_vencimiento: frontendFactura.fechaVencimiento,
   sub_total: frontendFactura.subtotal?.toString() || "0.00",
@@ -94,8 +93,8 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
   const [selectedId, setSelectedId] = useState<string>("");
   const [newFactura, setNewFactura] = useState<Partial<Factura>>({
-    porcentajeIva: 16, // Valor por defecto
-    fechaVencimiento: getTomorrowDate(), // Fecha de mañana por defecto
+    porcentajeIva: 16,
+    fechaVencimiento: getTomorrowDate(),
   });
   const [editFactura, setEditFactura] = useState<Factura | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -109,7 +108,15 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
       setLoading(true);
       try {
         const response = await api.get("/facturas");
-        console.log("Facturas recibidas del backend:", response.data);
+        console.log("Respuesta completa del backend (facturas):", response);
+        console.log("Datos recibidos (response.data):", response.data);
+
+        if (response.status === 204 || !Array.isArray(response.data)) {
+          setAllFacturas([]);
+          updateDisplayedItems([], currentPage);
+          return;
+        }
+
         const mappedFacturas = response.data.map(mapBackendToFrontend);
         let filteredFacturas = mappedFacturas;
 
@@ -130,7 +137,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
 
         if (searchRif) {
           filteredFacturas = filteredFacturas.filter((factura: Factura) =>
-            factura.rif.toString().includes(searchRif)
+            (factura.rif || "").toLowerCase().includes(searchRif.toLowerCase())
           );
         }
 
@@ -150,23 +157,38 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
     fetchFacturas();
   }, [filterType, filterValue, searchRif]);
 
-  useEffect(() => {
-    const fetchProveedores = async () => {
-      try {
-        const response = await api.get("/Proveedor/listAll");
-        console.log("Proveedores recibidos:", response.data);
-        setProveedores(response.data);
-      } catch (error: any) {
-        console.error(
-          "Error fetching proveedores:",
-          error.response?.data || error.message
-        );
-        setErrorMessage("Error al cargar los proveedores.");
-        setTimeout(() => setErrorMessage(null), 3000);
+  const fetchProveedores = async () => {
+    try {
+      const response = await api.get("/Proveedor/listAll");
+      console.log("Proveedores recibidos:", response.data);
+      setProveedores(response.data);
+    } catch (error: any) {
+      console.error(
+        "Error fetching proveedores:",
+        error.response?.data || error.message
+      );
+      setErrorMessage("Error al cargar los proveedores.");
+      setTimeout(() => setErrorMessage(null), 3000);
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    if (proveedores.length === 0) {
+      fetchProveedores(); // Solo carga proveedores si no están cargados
+    }
+    setShowAddModal(true);
+  };
+
+  const handleOpenEditModal = (id: string) => {
+    const facturaToEdit = allFacturas.find((fact) => fact.id === id);
+    if (facturaToEdit) {
+      setEditFactura(facturaToEdit);
+      if (proveedores.length === 0) {
+        fetchProveedores(); // Solo carga proveedores si no están cargados
       }
-    };
-    fetchProveedores();
-  }, []);
+      setShowEditModal(true);
+    }
+  };
 
   const updateDisplayedItems = (items: Factura[], page: number) => {
     const startIndex = (page - 1) * itemsPerPage;
@@ -186,7 +208,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
       setAllFacturas(updatedFacturas);
       updateDisplayedItems(updatedFacturas, currentPage);
       setShowAddModal(false);
-      setNewFactura({});
+      setNewFactura({ porcentajeIva: 16, fechaVencimiento: getTomorrowDate() });
       setSuccessMessage("Factura agregada con éxito");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error: any) {
@@ -264,7 +286,9 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
   ) => {
     const { name, value } = e.target;
     const updatedValue =
-      name === "monto" || name === "montoConIva" ? Number(value) : value;
+      name === "subtotal" || name === "iva" || name === "porcentajeIva"
+        ? Number(value)
+        : value;
     if (isEdit && editFactura) {
       setEditFactura({ ...editFactura, [name]: updatedValue });
     } else {
@@ -279,24 +303,15 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
     const localDate = e.target.value;
     const isoDate = new Date(localDate).toISOString();
     if (isEdit && editFactura) {
-      setEditFactura({ ...editFactura, fecha: isoDate });
+      setEditFactura({ ...editFactura, [e.target.name]: isoDate });
     } else {
-      setNewFactura({ ...newFactura, fecha: isoDate });
+      setNewFactura({ ...newFactura, [e.target.name]: isoDate });
     }
   };
 
   const handleShowDetails = (id: string) => {
     setSelectedId(id);
     setShowDetailModal(true);
-  };
-
-  const openEditModal = (id: string) => {
-    const facturaToEdit = allFacturas.find((fact) => fact.id === id);
-    console.log("Factura seleccionada para editar:", facturaToEdit);
-    if (facturaToEdit) {
-      setEditFactura(facturaToEdit);
-      setShowEditModal(true);
-    }
   };
 
   const handlePageChange = (page: number) => {
@@ -313,10 +328,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
         <p>Cargando...</p>
       ) : (
         <>
-          <button
-            className="btn btn-success mb-3"
-            onClick={() => setShowAddModal(true)}
-          >
+          <button className="btn btn-success mb-3" onClick={handleOpenAddModal}>
             <i className="bi bi-plus me-1"></i> Agregar Factura
           </button>
           {successMessage && (
@@ -335,6 +347,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                 <th>Fecha</th>
                 <th>Número Factura</th>
                 <th>RIF</th>
+                <th>Proveedor</th>
                 <th>Subtotal</th>
                 <th>IVA</th>
                 <th>Acciones</th>
@@ -358,12 +371,13 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                     </td>
                     <td>{factura.numeroFactura || "N/A"}</td>
                     <td>{factura.rif || "N/A"}</td>
+                    <td>{factura.nombreProveedor || "N/A"}</td>
                     <td>{factura.subtotal || "N/A"}</td>
                     <td>{factura.iva || "N/A"}</td>
                     <td>
                       <button
                         className="btn btn-warning btn-sm me-2"
-                        onClick={() => openEditModal(factura.id)}
+                        onClick={() => handleOpenEditModal(factura.id)}
                       >
                         <i className="bi bi-pencil"></i>
                       </button>
@@ -378,7 +392,7 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="text-center">
+                  <td colSpan={7} className="text-center">
                     No hay facturas disponibles
                   </td>
                 </tr>
@@ -431,7 +445,6 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
         </>
       )}
 
-      {/* Modal para agregar factura */}
       <Modal show={showAddModal} onHide={() => setShowAddModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Agregar Factura</Modal.Title>
@@ -546,7 +559,6 @@ const FacturasModule: React.FC<FacturasModuleProps> = ({
         </Modal.Footer>
       </Modal>
 
-      {/* Modal para editar factura */}
       <Modal show={showEditModal} onHide={() => setShowEditModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>Editar Factura</Modal.Title>

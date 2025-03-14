@@ -20,7 +20,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ setToken }) => {
-  const [selectedModule, setSelectedModule] = useState<string>("facturas");
+  const [selectedModule, setSelectedModule] = useState<string>("proveedores"); // Cambiado a "proveedores" como valor por defecto
   const [userName, setUserName] = useState<string>("Usuario");
   const [filterType, setFilterType] = useState<"mes" | "año">("mes");
   const [filterValue, setFilterValue] = useState<string>("");

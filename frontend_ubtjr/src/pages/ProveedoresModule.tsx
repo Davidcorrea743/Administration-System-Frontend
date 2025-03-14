@@ -67,7 +67,11 @@ const ProveedoresModule: React.FC<ProveedoresModuleProps> = ({
       setLoading(true);
       try {
         console.log("Haciendo solicitud a: /Proveedor/listAll");
-        const response = await api.get("/Proveedor/listAll");
+        const response = await api.get("/Proveedor/listAll", {
+          headers: {
+            "ngrok-skip-browser-warning": "true", // Agrega este encabezado para omitir la advertencia de Ngrok
+          },
+        });
         console.log("Respuesta del backend:", response.data);
 
         let filteredProveedores: ProveedorListItem[] = response.data;
@@ -231,7 +235,11 @@ const ProveedoresModule: React.FC<ProveedoresModuleProps> = ({
   const openEditModal = (rif: string) => {
     const fetchProveedorDetails = async () => {
       try {
-        const response = await api.get(`/Proveedor/${rif}`);
+        const response = await api.get(`/Proveedor/${rif}`, {
+          headers: {
+            "ngrok-skip-browser-warning": "true", // Agrega este encabezado para el fetch de detalles
+          },
+        });
         setEditProveedor(response.data);
         setShowEditModal(true);
       } catch (error: any) {

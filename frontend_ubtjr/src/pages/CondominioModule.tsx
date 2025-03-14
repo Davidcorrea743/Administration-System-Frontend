@@ -67,7 +67,11 @@ const CondominioModule: React.FC<CondominioModuleProps> = ({
     const fetchCondominios = async () => {
       setLoading(true);
       try {
-        const response = await api.get("/condominio");
+        const response = await api.get("/condominio", {
+          headers: {
+            "ngrok-skip-browser-warning": "true", // Agrega este encabezado para omitir la advertencia de Ngrok
+          },
+        });
         let filteredCondominios = response.data;
 
         if (filterValue) {
